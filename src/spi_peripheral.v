@@ -23,7 +23,6 @@ module spi_peripheral (
 );
 
     //Clock Domain Crossing (CDC) Synchronizers
-    // Using 3-stage flip-flop chains for sclk to enable stable edge detection 
     reg [2:0] sclk_sync;
     reg [1:0] ncs_sync;
     reg [1:0] copi_sync;
@@ -70,7 +69,7 @@ module spi_peripheral (
                     bit_count <= 5'b0;
                 end
             end else if (sclk_rising_edge) begin
-                shift_reg <= {shift_reg[14:0], copi_sync[0]};
+                shift_reg <= {shift_reg[14:0], copi_sync[1]};
                 bit_count <= bit_count + 1'b1;
             end
         end
