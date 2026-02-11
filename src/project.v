@@ -6,8 +6,6 @@
 `default_nettype none
 
 module tt_um_uwasic_onboarding_gong (
-
-  // Add this inside the module block
   
   // Create wires to refer to the values of the registers
   input  wire [7:0] ui_in,    // Dedicated inputs
@@ -20,13 +18,25 @@ module tt_um_uwasic_onboarding_gong (
   input  wire       rst_n     // reset_n - low to reset
 );
 
-    assign uio_oe = 8'hFF; // Set all IOs to output
-
     wire [7:0] en_reg_out_7_0;
     wire [7:0] en_reg_out_15_8;
     wire [7:0] en_reg_pwm_7_0;
     wire [7:0] en_reg_pwm_15_8;
     wire [7:0] pwm_duty_cycle;
+
+  // Instantiate the SPI Peripheral
+  spi_peripheral spi_inst (
+        .clk(clk),
+        .rst_n(rst_n),
+        .sclk_in(ui_in[0]),   // ui_in[0] is SCLK
+        .copi_in(ui_in[1]),   // ui_in[1] is COPI
+        .ncs_in(ui_in[2]),    // ui_in[2] is nCS 
+        .en_reg_out_7_0(en_reg_out_7_0),
+        .en_reg_out_15_8(en_reg_out_15_8),
+        .en_reg_pwm_7_0(en_reg_pwm_7_0),
+        .en_reg_pwm_15_8(en_reg_pwm_15_8),
+        .pwm_duty_cycle(pwm_duty_cycle)
+    );
 
   // Instantiate the PWM module
   pwm_peripheral pwm_peripheral_inst (
@@ -39,6 +49,9 @@ module tt_um_uwasic_onboarding_gong (
     .pwm_duty_cycle(pwm_duty_cycle),
     .out({uio_out, uo_out})
   );
+
+
+    assign uio_oe = 8'hFF; // Set all IOs to output
 
 // Add uio_in and ui_in[7:3] to the list of unused signals:
  wire _unused = &{ena, ui_in[7:3], uio_in, 1'b0};
