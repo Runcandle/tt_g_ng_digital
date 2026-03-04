@@ -288,13 +288,13 @@ async def test_pwm_duty(dut):
     dut._log.info("Verifying 0 percent expected duty cycle")
     await send_spi_transaction(dut, 1, 0x04, 0x00)
     await ClockCycles(dut.clk, 5000)
-    assert (dut.uo_out.value.integer & 1) == 0, "Signal is not low even with 0 percent duty cycle"
+    assert (dut.uo_out.value.integer & 1) == 0
 
     # Send spi transaction to PWM_DUTY_CYCLE with 100% duty cycle (signal is HIGH)
     dut._log.info("Verifying frequency with 100 percent duty cycle")
     await send_spi_transaction(dut, 1, 0x04, 0xFF)
     await ClockCycles(dut.clk, 5000)
-    assert (dut.uo_out.value.integer & 1) == 1, "Signal is not HIGH even with 100 percent duty cycle"
+    assert (dut.uo_out.value.integer & 1) == 1
 
     # Reset
     dut._log.info("Reset")
