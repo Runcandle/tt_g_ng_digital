@@ -151,11 +151,161 @@ async def test_spi(dut):
 
 @cocotb.test()
 async def test_pwm_freq(dut):
-    # Write your test here
+    #Write your test here
+    dut._log.info("Start SPI test")
+
+    upper_freq = 3.0 * 1.01
+    lower_freq = 3.0 * 0.99
+    # Set the clock period to 100 ns (10 MHz)
+    clock = Clock(dut.clk, 100, units="ns")
+    cocotb.start_soon(clock.start())
+
+    # Reset
+    dut._log.info("Reset")
+    dut.ena.value = 1
+    ncs = 1
+    bit = 0
+    sclk = 0
+    dut.ui_in.value = ui_in_logicarray(ncs, bit, sclk)
+    dut.rst_n.value = 0
+    await ClockCycles(dut.clk, 5)
+    dut.rst_n.value = 1
+    await ClockCycles(dut.clk, 5)
+
+    await send_spi_transaction(dut, 1, 0x00, 0x01)
+    await send_spi_transaction(dut, 1, 0x02, 0x01)
+    await send_spi_transaction(dut, 1, 0x04, 0x80)
+
+
+    while((dut.uo_out.value.integer & 1) == 1):
+        await ClockCycles(dut.clk, 1)
+    
+    # Read first rising edge
+    while not (((dut.uo_out.value.integer) & 1) == 1):
+        await ClockCycles(dut.clk, 1)
+    t_rising_edge1 = cocotb.utils.get_sim_time(units="ns")
+    
+    # Falling edge after first rising edge
+    while((dut.uo_out.value.integer & 1) == 1):
+        await ClockCycles(dut.clk, 1)
+    
+    # Read second rising edge
+    while not ((dut.uo_out.value.integer & 1) == 1):
+        await ClockCycles(dut.clk, 1)
+    t_rising_edge2 = cocotb.utils.get_sim_time(units="ns")
+    
+    period = t_rising_edge2 - t_rising_edge1
+    frequency = (1000000.0 / period)
+    
+    assert (frequency <= upper_freq and frequency >= lower_freq), f"Frequency is {frequency}, Expected {lower_freq} <= {frequency} <= {upper_freq}"
+    
+    # Send spi transaction to PWM_DUTY_CYCLE with 0% duty cycle (signal is LOW)
+    dut._log.info("Verifying frequency with 0 percent duty cycle")
+    await send_spi_transaction(dut, 1, 0x04, 0x00)
+    await ClockCycles(dut.clk, 5000)
+    assert (dut.uo_out.value.integer & 1) == 0, "Signal is not low even with 0 percent duty cycle..."
+
+    # Send spi transaction to PWM_DUTY_CYCLE with 100% duty cycle (signal is HIGH)
+    dut._log.info("Verifying frequency with 100 percent duty cycle")
+    await send_spi_transaction(dut, 1, 0x04, 0xFF)
+    await ClockCycles(dut.clk, 5000)
+    assert (dut.uo_out.value.integer & 1) == 1, "Signal is not HIGH even with 100 percent duty cycle..."
+
+    # Reset
+    dut._log.info("Reset")
+    dut.ena.value = 1
+    ncs = 1
+    bit = 0
+    sclk = 0
+    dut.ui_in.value = ui_in_logicarray(ncs, bit, sclk)
+    dut.rst_n.value = 0
+    await ClockCycles(dut.clk, 5)
+    dut.rst_n.value = 1
+    await ClockCycles(dut.clk, 5)
+
     dut._log.info("PWM Frequency test completed successfully")
+
 
 
 @cocotb.test()
 async def test_pwm_duty(dut):
-    # Write your test here
+        # Set the clock period to 100 ns (10 MHz)
+    clock = Clock(dut.clk, 100, units="ns")
+    cocotb.start_soon(clock.start())
+
+    # Reset
+    dut._log.info("Reset")
+    dut.ena.value = 1
+    ncs = 1
+    bit = 0
+    sclk = 0
+    dut.ui_in.value = ui_in_logicarray(ncs, bit, sclk)
+    dut.rst_n.value = 0
+    await ClockCycles(dut.clk, 5)
+    dut.rst_n.value = 1
+    await ClockCycles(dut.clk, 5)
+
+    # Initiate output streams
+    await send_spi_transaction(dut, 1, 0x00, 0x01)
+    await send_spi_transaction(dut, 1, 0x02, 0x01)
+
+    # perform sweep (16 <= t < 241) at increments of 32
+    dut._log.info("Sweeping duty register values between 16 (inclusively) and 241 (exclusively)")
+    for t in range(16, 241, 32):
+        expected_duty = (t / 256.0) * 100
+        upper_bound_duty = expected_duty * 1.01
+        lower_bound_duty = expected_duty * 0.99
+
+        dut._log.info(f"Sending {t} duty cycle to PWM output stream")
+        await send_spi_transaction(dut, 1, 0x04, t)
+
+        # Wait until current "hump" ends
+        while(dut.uo_out.value.integer & 1) == 1:
+            await ClockCycles(dut.clk, 1)
+        
+        # Wait for first rising edge
+        while not (dut.uo_out.value.integer & 1) == 1:
+            await ClockCycles(dut.clk, 1)
+        t_rising_edge1 = cocotb.utils.get_sim_time(units="ns")
+
+        # Wait for falling edge after first rising edge
+        while (dut.uo_out.value.integer & 1) == 1:
+            await ClockCycles(dut.clk, 1)
+        t_falling_edge = cocotb.utils.get_sim_time(units="ns")
+
+        while not (dut.uo_out.value.integer & 1) == 1:
+            await ClockCycles(dut.clk, 1)
+        t_rising_edge2 = cocotb.utils.get_sim_time(units="ns")
+
+        high_time = t_falling_edge - t_rising_edge1
+        period = t_rising_edge2 - t_rising_edge1
+        duty_cycle = (high_time / period) * 100
+
+        assert (lower_bound_duty <= duty_cycle <= upper_bound_duty), f"{duty_cycle} does not fall between {lower_bound_duty} and {upper_bound_duty}"
+        dut._log.info(f"Duty cycle check for {t} complete")
+
+    # Send spi transaction to PWM_DUTY_CYCLE with 0% duty cycle (signal is LOW)
+    dut._log.info("Verifying 0 percent expected duty cycle")
+    await send_spi_transaction(dut, 1, 0x04, 0x00)
+    await ClockCycles(dut.clk, 5000)
+    assert (dut.uo_out.value.integer & 1) == 0, "Signal is not low even with 0 percent duty cycle"
+
+    # Send spi transaction to PWM_DUTY_CYCLE with 100% duty cycle (signal is HIGH)
+    dut._log.info("Verifying frequency with 100 percent duty cycle")
+    await send_spi_transaction(dut, 1, 0x04, 0xFF)
+    await ClockCycles(dut.clk, 5000)
+    assert (dut.uo_out.value.integer & 1) == 1, "Signal is not HIGH even with 100 percent duty cycle"
+
+    # Reset
+    dut._log.info("Reset")
+    dut.ena.value = 1
+    ncs = 1
+    bit = 0
+    sclk = 0
+    dut.ui_in.value = ui_in_logicarray(ncs, bit, sclk)
+    dut.rst_n.value = 0
+    await ClockCycles(dut.clk, 5)
+    dut.rst_n.value = 1
+    await ClockCycles(dut.clk, 5)
+    
     dut._log.info("PWM Duty Cycle test completed successfully")
